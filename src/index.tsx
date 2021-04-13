@@ -10,7 +10,6 @@ import {
   Easing,
   LayoutChangeEvent,
   BackHandler,
-  KeyboardAvoidingView,
   Keyboard,
   ScrollView,
   FlatList,
@@ -41,8 +40,8 @@ import { isIphoneX, isIos, isAndroid } from './utils/devices';
 import { invariant } from './utils/invariant';
 import { composeRefs } from './utils/compose-refs';
 import s from './styles';
+import { ViewProps } from 'react-native';
 
-const AnimatedKeyboardAvoidingView = Animated.createAnimatedComponent(KeyboardAvoidingView);
 /**
  * When scrolling, it happens than beginScrollYValue is not always equal to 0 (top of the ScrollView).
  * Since we use this to trigger the swipe down gesture animation, we allow a small threshold to
@@ -365,20 +364,6 @@ const ModalizeBase = (
       setLastSnap(lastSnapValue);
       setIsVisible(toInitialAlwaysOpen);
     });
-  };
-
-  const handleModalizeContentLayout = ({ nativeEvent: { layout } }: LayoutChangeEvent): void => {
-    const value = Math.min(
-      layout.height + (!adjustToContentHeight || keyboardHeight ? layout.y : 0),
-      endHeight -
-        Platform.select({
-          ios: 0,
-          android: keyboardHeight,
-          default: 0,
-        }),
-    );
-
-    setModalHeightValue(value);
   };
 
   const handleBaseLayout = (
@@ -893,33 +878,6 @@ const ModalizeBase = (
     };
   }, []);
 
-  const keyboardAvoidingViewProps: Animated.AnimatedProps<KeyboardAvoidingViewProps> = {
-    keyboardVerticalOffset: keyboardAvoidingOffset,
-    behavior: keyboardAvoidingBehavior,
-    enabled: avoidKeyboardLikeIOS,
-    style: [
-      s.modalize__content,
-      modalStyle,
-      {
-        height: modalHeightValue,
-        maxHeight: endHeight,
-        transform: [
-          {
-            translateY: value.interpolate({
-              inputRange: [-40, 0, endHeight],
-              outputRange: [0, 0, endHeight],
-              extrapolate: 'clamp',
-            }),
-          },
-        ],
-      },
-    ],
-  };
-
-  if (!avoidKeyboardLikeIOS && !adjustToContentHeight) {
-    keyboardAvoidingViewProps.onLayout = handleModalizeContentLayout;
-  }
-
   const renderModalize = (
     <View
       style={[s.modalize, rootStyle]}
@@ -933,12 +891,12 @@ const ModalizeBase = (
       >
         <View style={s.modalize__wrapper} pointerEvents="box-none">
           {showContent && (
-            <AnimatedKeyboardAvoidingView {...keyboardAvoidingViewProps}>
+            <Animated.View>
               {renderHandle()}
               {renderComponent(HeaderComponent, 'header')}
               {renderChildren()}
               {renderComponent(FooterComponent, 'footer')}
-            </AnimatedKeyboardAvoidingView>
+            </Animated.View>
           )}
 
           {withOverlay && renderOverlay()}
