@@ -16,11 +16,9 @@ import {
   SectionList,
   Platform,
   StatusBar,
-  KeyboardEvent,
   NativeSyntheticEvent,
   NativeScrollEvent,
   StyleSheet,
-  KeyboardAvoidingViewProps,
   ViewStyle,
   NativeEventSubscription,
 } from 'react-native';
@@ -40,7 +38,6 @@ import { isIphoneX, isIos, isAndroid } from './utils/devices';
 import { invariant } from './utils/invariant';
 import { composeRefs } from './utils/compose-refs';
 import s from './styles';
-import { ViewProps } from 'react-native';
 
 /**
  * When scrolling, it happens than beginScrollYValue is not always equal to 0 (top of the ScrollView).
@@ -66,7 +63,6 @@ const ModalizeBase = (
 
     // Styles
     rootStyle,
-    modalStyle,
     handleStyle,
     overlayStyle,
     childrenStyle,
@@ -85,13 +81,6 @@ const ModalizeBase = (
     // Options
     handlePosition = 'outside',
     disableScrollIfPossible = true,
-    avoidKeyboardLikeIOS = Platform.select({
-      ios: true,
-      android: false,
-      default: true,
-    }),
-    keyboardAvoidingBehavior = 'padding',
-    keyboardAvoidingOffset,
     panGestureEnabled = true,
     panGestureComponentEnabled = false,
     tapGestureEnabled = true,
@@ -149,7 +138,6 @@ const ModalizeBase = (
   const [showContent, setShowContent] = React.useState(true);
   const [enableBounces, setEnableBounces] = React.useState(true);
   const [keyboardToggle, setKeyboardToggle] = React.useState(false);
-  const [keyboardHeight, setKeyboardHeight] = React.useState(0);
   const [disableScroll, setDisableScroll] = React.useState(
     alwaysOpen || snapPoint ? true : undefined,
   );
@@ -164,8 +152,6 @@ const ModalizeBase = (
   const beginScrollY = React.useRef(new Animated.Value(0)).current;
   const dragY = React.useRef(new Animated.Value(0)).current;
   const translateY = React.useRef(new Animated.Value(screenHeight)).current;
-  const reverseBeginScrollY = React.useRef(Animated.multiply(new Animated.Value(-1), beginScrollY))
-    .current;
 
   const tapGestureModalizeRef = React.useRef<TapGestureHandler>(null);
   const panGestureChildrenRef = React.useRef<PanGestureHandler>(null);
@@ -173,21 +159,6 @@ const ModalizeBase = (
   const contentViewRef = React.useRef<ScrollView | FlatList<any> | SectionList<any>>(null);
   const tapGestureOverlayRef = React.useRef<TapGestureHandler>(null);
   const backButtonListenerRef = React.useRef<NativeEventSubscription>(null);
-
-  // We diff and get the negative value only. It sometimes go above 0
-  // (e.g. 1.5) and creates the flickering on Modalize for a ms
-  const diffClamp = Animated.diffClamp(reverseBeginScrollY, -screenHeight, 0);
-  const componentDragEnabled = (componentTranslateY as any)._value === 1;
-  // When we have a scrolling happening in the ScrollView, we don't want to translate
-  // the modal down. We either multiply by 0 to cancel the animation, or 1 to proceed.
-  const dragValue = Animated.add(
-    Animated.multiply(dragY, componentDragEnabled ? 1 : cancelTranslateY),
-    diffClamp,
-  );
-  const value = Animated.add(
-    Animated.multiply(translateY, componentDragEnabled ? 1 : cancelTranslateY),
-    dragValue,
-  );
 
   let willCloseModalize = false;
 
@@ -207,16 +178,12 @@ const ModalizeBase = (
     return true;
   };
 
-  const handleKeyboardShow = (event: KeyboardEvent): void => {
-    const { height } = event.endCoordinates;
-
+  const handleKeyboardShow = (): void => {
     setKeyboardToggle(true);
-    setKeyboardHeight(height);
   };
 
   const handleKeyboardHide = (): void => {
     setKeyboardToggle(false);
-    setKeyboardHeight(0);
   };
 
   const handleAnimateOpen = (
