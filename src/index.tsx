@@ -38,6 +38,7 @@ import { isIphoneX, isIos, isAndroid } from './utils/devices';
 import { invariant } from './utils/invariant';
 import { composeRefs } from './utils/compose-refs';
 import s from './styles';
+import { ViewProps } from 'react-native';
 
 /**
  * When scrolling, it happens than beginScrollYValue is not always equal to 0 (top of the ScrollView).
@@ -63,6 +64,7 @@ const ModalizeBase = (
 
     // Styles
     rootStyle,
+    modalStyle,
     handleStyle,
     overlayStyle,
     childrenStyle,
@@ -152,6 +154,8 @@ const ModalizeBase = (
   const beginScrollY = React.useRef(new Animated.Value(0)).current;
   const dragY = React.useRef(new Animated.Value(0)).current;
   const translateY = React.useRef(new Animated.Value(screenHeight)).current;
+  const reverseBeginScrollY = React.useRef(Animated.multiply(new Animated.Value(-1), beginScrollY))
+    .current;
 
   const tapGestureModalizeRef = React.useRef<TapGestureHandler>(null);
   const panGestureChildrenRef = React.useRef<PanGestureHandler>(null);
@@ -159,6 +163,22 @@ const ModalizeBase = (
   const contentViewRef = React.useRef<ScrollView | FlatList<any> | SectionList<any>>(null);
   const tapGestureOverlayRef = React.useRef<TapGestureHandler>(null);
   const backButtonListenerRef = React.useRef<NativeEventSubscription>(null);
+
+  // We diff and get the negative value only. It sometimes go above 0
+  // (e.g. 1.5) and creates the flickering on Modalize for a ms
+  const diffClamp = Animated.diffClamp(reverseBeginScrollY, -screenHeight, 0);
+  const componentDragEnabled = (componentTranslateY as any)._value === 1;
+  // When we have a scrolling happening in the ScrollView, we don't want to translate
+  // the modal down. We either multiply by 0 to cancel the animation, or 1 to proceed.
+  const dragValue = Animated.add(
+    Animated.multiply(dragY, componentDragEnabled ? 1 : cancelTranslateY),
+    diffClamp,
+  );
+
+  const value = Animated.add(
+    Animated.multiply(translateY, componentDragEnabled ? 1 : cancelTranslateY),
+    dragValue,
+  );
 
   let willCloseModalize = false;
 
@@ -331,6 +351,12 @@ const ModalizeBase = (
       setLastSnap(lastSnapValue);
       setIsVisible(toInitialAlwaysOpen);
     });
+  };
+
+  const handleModalizeContentLayout = ({ nativeEvent: { layout } }: LayoutChangeEvent): void => {
+    const value = Math.min(layout.height + (!adjustToContentHeight ? layout.y : 0), endHeight);
+
+    setModalHeightValue(value);
   };
 
   const handleBaseLayout = (
@@ -845,6 +871,30 @@ const ModalizeBase = (
     };
   }, []);
 
+  const wrapperViewProps: Animated.AnimatedProps<ViewProps> = {
+    style: [
+      s.modalize__content,
+      modalStyle,
+      {
+        height: modalHeightValue,
+        maxHeight: endHeight,
+        transform: [
+          {
+            translateY: value.interpolate({
+              inputRange: [-40, 0, endHeight],
+              outputRange: [0, 0, endHeight],
+              extrapolate: 'clamp',
+            }),
+          },
+        ],
+      },
+    ],
+  };
+
+  if (!adjustToContentHeight) {
+    wrapperViewProps.onLayout = handleModalizeContentLayout;
+  }
+
   const renderModalize = (
     <View
       style={[s.modalize, rootStyle]}
@@ -858,7 +908,7 @@ const ModalizeBase = (
       >
         <View style={s.modalize__wrapper} pointerEvents="box-none">
           {showContent && (
-            <Animated.View>
+            <Animated.View {...wrapperViewProps}>
               {renderHandle()}
               {renderComponent(HeaderComponent, 'header')}
               {renderChildren()}
